@@ -1,0 +1,15 @@
+#= 
+AA 228 Final Project 
+Colton Crosby, William Ho, Kevin Murillo
+=#
+
+using Graphs
+using Plots
+using SpecialFunctions
+using CSV
+using DataFrames
+using Printf
+using LinearAlgebra
+using Random
+using SparseArrays
+
