@@ -13,12 +13,53 @@ using LinearAlgebra
 using Random
 using SparseArrays
 
-# Define suits and ranks
-suits = ["♠", "♣", "♡", "♢"]  # Spades, Clubs, Hearts, Diamonds
-ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
 
-# Create a deck as a vector of strings
-deck = [rank * suit for suit in suits, rank in ranks]
+struct gameState
+    agent_hand::Vector{String}           # Two cards for the agent's hand, e.g., ["A♠", "K♦"]
+    community_cards::Vector{String}       # Community cards on the table
+    agent_stack::Int                      # Agent's stack size (chips)
+    opponent_stack::Int                   # Opponent's stack size (chips)
+    pot::Int                              # Pot size
+    belief_opponent_hand::Vector{Float64} # Belief distribution over opponent's possible hands
+    belief_play_style::Float64            # Opponent's play style (0 = passive, 1 = aggressive)
+end
 
-# Flatten the 2D array into a single vector
-deck = vec(deck)
+mutable struct Deck
+    cards::Vector{String}   # Vector holding all cards in the deck
+    index::Int              # Position to keep track of drawn cards
+end
+
+function create_deck()::Deck
+    suits = ["♠", "♣", "♡", "♢"]  # Spades, Clubs, Hearts, Diamonds
+    ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
+    cards = [rank * suit for suit in suits for rank in ranks]
+    shuffle!(cards)  # Shuffle the deck initially
+    return Deck(cards, 1)  # Start with the index at 1 (first card in the shuffled deck)
+end
+
+function draw!(deck::Deck, num_cards::Int = 1)::Vector{String}
+    if deck.index + num_cards - 1 > length(deck.cards)
+        error("Not enough cards left in the deck")
+    end
+    drawn_cards = deck.cards[deck.index : deck.index + num_cards - 1]
+    deck.index += num_cards
+    return drawn_cards
+end
+
+function shuffleDeck!(deck::Deck)
+    shuffle!(deck.cards)
+    deck.index = 1  # Reset index to the start
+end
+
+deck = create_deck()
+shuffleDeck!(deck)
+
+# initial_state = gameState(
+#     ["A♠", "K♢"],          # Agent's hand
+#     ["10♠", "J♢", "Q♡"],   # Community cards
+#     1000,                   # Agent stack
+#     1000,                   # Opponent stack
+#     100,                    # Pot size
+#     fill(1/1225, 1225),     # Belief over opponent's hand (uniform initially)
+#     0.5                     # Initial belief about opponent's play style
+# )
