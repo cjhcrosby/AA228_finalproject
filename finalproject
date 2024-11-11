@@ -33,7 +33,6 @@ function create_deck()::Deck
     suits = ["♠", "♣", "♡", "♢"]  # Spades, Clubs, Hearts, Diamonds
     ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
     cards = [rank * suit for suit in suits for rank in ranks]
-    shuffle!(cards)  # Shuffle the deck initially
     return Deck(cards, 1)  # Start with the index at 1 (first card in the shuffled deck)
 end
 
@@ -52,14 +51,18 @@ function shuffleDeck!(deck::Deck)
 end
 
 deck = create_deck()
+sorted_deck = create_deck()
 shuffleDeck!(deck)
 
-# initial_state = gameState(
-#     ["A♠", "K♢"],          # Agent's hand
-#     ["10♠", "J♢", "Q♡"],   # Community cards
-#     1000,                   # Agent stack
-#     1000,                   # Opponent stack
-#     100,                    # Pot size
-#     fill(1/1225, 1225),     # Belief over opponent's hand (uniform initially)
-#     0.5                     # Initial belief about opponent's play style
-# )
+## PRE FLOP
+# begin round
+initial_state = gameState(
+    draw!(deck,2),         # Agent's hand
+    ["","",""],   # Community cards
+    1000,                   # Agent stack
+    1000,                   # Opponent stack
+    100,                    # Pot size
+    fill(1/1225, 1225),     # Belief over opponent's hand (uniform initially)
+    0.5                     # Initial belief about opponent's play style
+)
+
