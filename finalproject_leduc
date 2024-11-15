@@ -76,12 +76,12 @@ function initialize_leduc_game(deck::LeducDeck)::LeducGameState
     community_card = draw!(deck, 1)[1]
 
     # Example networks with a simple structure
-    strategy_network = Chain(Dense(6, 3, relu), Dense(3,6))  # Simple 3-output softmax network
-    regret_network = Chain(Dense(6, 1, relu), Dense(1,6))             # 3-output regret estimation network
+    strategy_network = Chain(Dense(6, 3, relu), Dense(3,6))  # 6 input (cards) 3 outputs (actions)
+    regret_network = Chain(Dense(1, 1, relu), Dense(1,6))    # 1xn inputs (history) 1 output (regret)
 
     return LeducGameState(
         agent_card, opponent_card, community_card,
-        100,        # Initial pot
+        0,        # Initial pot
         100,        # Agent's stack
         100,        # Opponent's stack
         1,          # Agent goes first
@@ -97,34 +97,34 @@ end
 function take_action!(state::LeducGameState, action::Int)
     betsize = 10
     push!(state.action_history, action) # add the action taken to the history (infostate)
-    if action == 2
+    if action == 2 # bet = 2
         state.pot += betsize  # Assume fixed bet amount for simplicity
-        if state.turn == 1
+        if state.turn%2 !== 0
             state.agent_stack -= betsize
         else
             state.opponent_stack -= betsize
         end
-    elseif action == 0
+    elseif action == 0 # fold = 0
         # If a player folds, the other wins the pot
-        if state.turn == 1
+        if state.turn%2 !== 0
             state.opponent_stack += state.pot
         else
             state.agent_stack += state.pot
         end
         state.pot = 0
     end
-    # Switch turn to the other player
-    state.turn = 3 - state.turn
+    # next turn
+    state.turn = state.turn+1 # turn = odd is agent, turn = even is opponent
 end
 
-
+# # # # # # # # # # # # # # # # ISSUE HERE WIITH EXPERIENCE REPLAY # # # # # # # # # # # # # # # # 
 # experience replay
 struct ExperienceReplay
-    capacity::Int
+    # capacity::Int
 end
 
 function ExperienceReplay(capacity::Int)
-    ExperienceReplay(Vector{Tuple{Vector{Float64}, Int, Float64}}(), capacity)
+    # ExperienceReplay(Vector{Tuple{Vector{Float64}, Int, Float64}}(), capacity)
 end
 
 # Method to add experience to the replay buffer
@@ -143,6 +143,7 @@ function sample_batch(replay::ExperienceReplay, batch_size::Int)
     end
     return [replay.data[rand(1:length(replay.data))] for _ in 1:batch_size]
 end
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
 function training_episode!(state::LeducGameState, replay::ExperienceReplay)
     # Reset game state for a new episode
@@ -151,7 +152,7 @@ function training_episode!(state::LeducGameState, replay::ExperienceReplay)
     state.agent_card = draw!(deck, 1)[1]
     state.opponent_card = draw!(deck, 1)[1]
     state.community_card = draw!(deck, 1)[1]
-    state.pot = 100
+    state.pot = 0
     state.turn = 1
     state.action_history = []
 
@@ -161,8 +162,7 @@ function training_episode!(state::LeducGameState, replay::ExperienceReplay)
         # Sample an action from the strategy network
         probs = state.strategy_network(current_belief)
         
-        action = sample([0, 1, 3], Weights(probs))
-
+        action = sample([0, 1, 2], Weights(probs))
 
 
         # Store experience (state features, action taken, regret placeholder)
@@ -180,6 +180,7 @@ function training_episode!(state::LeducGameState, replay::ExperienceReplay)
     end
 end
 
+# # # # # ISSUES IN THIS SECTION # # # # # # # # # # # # # # # # # # # 
 # networks
 function compute_regret(state::LeducGameState, reward::Float64, action::Int)
     # Compute counterfactual regret for a specific action
@@ -202,15 +203,15 @@ function update_networks!(state::LeducGameState, replay::ExperienceReplay)
         computed_regret = compute_regret(state, regret, action)
         
         # Compute loss for the regret network
-        # regret_network = Chain(Dense(6, 3, σ))             # 3-output regret estimation network
-        regret_network = Chain(Dense(6, 1, relu), Dense(1,6))             # 3-output regret estimation network
-        loss_xy(x,y) = Flux.Losses.mse(regret_network(x),y)
+        # regret_network = Chain(Dense(6, 3, σ))           
+        # regret_network = Chain(Dense(6, 1, relu), Dense(1,6))            
+        loss_xy(x,y) = Flux.Losses.mse(state.regret_network(x),y)
         # loss_r(belief,computed_regret) = Flux.Losses.mse(state.regret_network(belief), computed_regret)
         
         # Update regret network
         # Flux.train!(loss_xy, Flux.params(state.regret_network), replay.data, opt)
-        datapoint = [(1,1,1,1,1,1)]
-        Flux.train!(loss_xy, Flux.params(regret_network), datapoint, opt)
+        datapoint = [(1,1,1,1,1,1)] # test data point
+        Flux.train!(loss_xy, Flux.params(state.regret_network), datapoint, opt)
         
         # # Compute strategy loss (assuming action is an integer)
         # strategy_loss = -sum(state.strategy_network(belief)[Int(action)+1])  # Add 1 because indexing starts at 1 in Julia
@@ -221,7 +222,7 @@ function update_networks!(state::LeducGameState, replay::ExperienceReplay)
     
     empty!(replay.data)  # Clear replay after each update
 end
-
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
 
 
