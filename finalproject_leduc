@@ -22,6 +22,35 @@ using StatsBase
 #     CheckCall
 #     Bet
 # end
+
+
+struct BanditModel
+    B # vector of beta distribution
+end
+
+function update!(model::BanditModel,a,r)
+    α,β = StatsBase.params(model.B[a])
+    model.B[a] = Beta(α + r, β + (1-r))
+    return model
+end
+
+mutable struct UCB1Exploration
+    c #exploration constant
+end
+
+function bonus(π::UCB1Exploration, B, a)
+    N = sum(b.α + b.β for b in B)
+    Na = B[a].α + B[a].β
+    return π.c * sqrt(log(N)/Na)
+end
+
+function (π::UCB1Exploration)(model::BanditModel)
+    B = model.B
+    ρ = mean.(B)
+    u = ρ .+ [bonus[π, B, a] for a in eachindex(B)]
+    return argmax(u)
+end
+
 Action = [0, 1, 2]
 
 # deck functions
