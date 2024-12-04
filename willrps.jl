@@ -1,5 +1,4 @@
 using Distributions
-using Plots
 
 const ACTIONS = ["rock", "paper", "scissors"]
 const NUM_ACTIONS = length(ACTIONS)
@@ -9,11 +8,7 @@ regret_sum = zeros(Float64, NUM_ACTIONS)
 strategy_sum = zeros(Float64, NUM_ACTIONS)
 opponent_strategy = fill(1.0 / NUM_ACTIONS, NUM_ACTIONS)  # Initial opponent strategy is random
 
-# Lists to store policies for plotting
-agent_policies = []
-opponent_policies = []
-
-# Function to get a normalized strategy (policy) based on regrets
+# Function to get a normalized strategy based on regrets
 function get_strategy(regret_sum)
     strategy = max.(regret_sum, 0)  # Replace negative regrets with zero
     normalizing_sum = sum(strategy)
@@ -50,7 +45,7 @@ function train_cfr_self_play(iterations)
     global regret_sum, strategy_sum, opponent_strategy
     action_utilities = zeros(Float64, NUM_ACTIONS)
     
-    for i in 1:iterations
+    for _ in 1:iterations
         # Get current strategy and sample an action
         strategy = get_strategy(regret_sum)
         my_action = get_action(strategy)
@@ -73,21 +68,21 @@ function train_cfr_self_play(iterations)
         
         # Update opponent strategy to be the current strategy (self-play)
         opponent_strategy = copy(strategy)
-        
-        # Store policies (probabilities) for plotting
-        push!(agent_policies, copy(strategy))
-        push!(opponent_policies, copy(opponent_strategy))
+    end
+end
+
+# Function to get the average strategy after training
+function get_average_strategy()
+    normalizing_sum = sum(strategy_sum)
+    if normalizing_sum > 0
+        return strategy_sum ./ normalizing_sum
+    else
+        return fill(1.0 / NUM_ACTIONS, NUM_ACTIONS)
     end
 end
 
 # Run training
 iterations = 10000
 train_cfr_self_play(iterations)
-
-# Extract policies for plotting (convert to matrix for easier plotting)
-agent_policies_matrix = hcat(agent_policies...)
-opponent_policies_matrix = hcat(opponent_policies...)
-
-# Plot the policies over iterations
-plot(1:iterations, agent_policies_matrix', label=["Agent: Rock" "Agent: Paper" "Agent: Scissors"], title="Agent Policies Over Iterations", xlabel="Iteration", ylabel="Probability", linewidth=2)
-plot!(1:iterations, opponent_policies_matrix', linestyle=:dash, label=["Opponent: Rock" "Opponent: Paper" "Opponent: Scissors"], title="Agent and Opponent Policies Over Iterations")
+average_strategy = get_average_strategy()
+println("Average strategy after training (Rock, Paper, Scissors): $average_strategy")
