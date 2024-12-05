@@ -13,7 +13,7 @@ using PrettyTables
 
 Actions = ["p","b"] # pass, bet
 const NUM_ACTIONS = length(Actions)
-
+const NUM_PLAYERS = 2
 
 # deck functions
 mutable struct KuhnDeck
@@ -48,7 +48,7 @@ end
 mutable struct History
     player_cards::Vector{String} # Cards dealt to players
     actions::Vector{String}      # Sequence of actions taken (e.g., "p", "b")
-    current_player::Int          # Index of the player whose turn it is
+    current_player
 end
 
 function initialize_history(deck::KuhnDeck)::History
@@ -77,26 +77,37 @@ function utility(history::History)::Vector{Float64}
     if !is_terminal(history)
         error("Utility can only be calculated for terminal histories.")
     end
-
-    actions = history.actions
-    if actions[end] == "p" && actions[end-1] == "b"
-        # Player 2 folds after Player 1 bets
-        return [1.0, -1.0]
-    elseif actions[end] == "p" && actions[end-1] == "p"
-        # Both players pass (showdown)
-        card_vals = Dict("K♠" => 3, "Q♠" => 2, "J♠" => 1)
-        winner = argmax([card_vals[history.player_cards[1]], card_vals[history.player_cards[2]]])
-        payoff = 1.0
-        return winner == 1 ? [payoff, -payoff] : [-payoff, payoff]
-    elseif actions[end] == "b" && actions[end-1] == "b"
-        # Both players bet (showdown)
-        card_vals = Dict("K♠" => 3, "Q♠" => 2, "J♠" => 1)
-        winner = argmax([card_vals[history.player_cards[1]], card_vals[history.player_cards[2]]])
-        payoff = 2.0
-        return winner == 1 ? [payoff, -payoff] : [-payoff, payoff]
+    card_vals = Dict("K♠" => 3, "Q♠" => 2, "J♠" => 1)
+    hact = history.actions
+    terminal_pass = hact[end] == "p"
+    double_bet = join(hact[end-1:end]) == "bb"
+    p1_card = history.player_cards[1]
+    p2_card = history.player_cards[2]
+    p1_val = card_vals[p1_card]
+    p2_val = card_vals[p2_card]
+    # terminal_pass = hact[end] == "p"
+    # println("P1: ", p1_card, ", P2: ", p2_card, ", actions: ",hact)
+    if terminal_pass 
+        if join(hact[end-1:end]) == "pp"
+            if p1_val > p2_val
+                util = [1.0, -1.0]
+            else
+                util = [-1.0, 1.0]
+            end
+        else
+            util = [1.0, -1.0]
+        end
+    elseif double_bet
+        if p1_val > p2_val
+            util = [2.0, -2.0]
+        else
+            util = [-2.0, 2.0]
+        end
     else
-        error("Unexpected terminal history.")
+        error("unexpected terminal history  in utility function")
     end
+    # println("outcome: ", util)
+    return util
 end
 
 
@@ -107,28 +118,32 @@ mutable struct InfoSet
     actions::Vector{String}     # Actions taken so far
     regret_sum::Vector{Float64} # Accumulated regrets for each action
     strategy_sum::Vector{Float64} # Sum of strategies over iterations
+    strategy::Vector{Float64}
 end
 
 function initialize_infoset(card::String, num_actions::Int)::InfoSet
     regret_sum = zeros(Float64, num_actions)
     strategy_sum = zeros(Float64, num_actions)
-    return InfoSet(card, String[], regret_sum, strategy_sum)
+    return InfoSet(card, String[], regret_sum, strategy_sum, [0.5, 0.5])
 end
-
 
 
 function get_strategy(infoset::InfoSet)::Vector{Float64}
     # Compute the strategy using regrets
-    positive_regrets = max.(infoset.regret_sum, 0.0)
-    normalizing_sum = sum(positive_regrets)
+    infoset.regret_sum = max.(infoset.regret_sum, 0.0)
+    normalizing_sum = sum(infoset.regret_sum)
+    infoset.strategy = infoset.regret_sum
     if normalizing_sum > 0
-        return positive_regrets / normalizing_sum
+        infoset.strategy = infoset.strategy / normalizing_sum
     else
-        return fill(1.0 / NUM_ACTIONS, NUM_ACTIONS) # Uniform strategy
+        infoset.strategy = fill(1.0 / NUM_ACTIONS, NUM_ACTIONS) # Uniform strategy
     end
+    # @info infoset
+    return infoset.strategy
 end
 
 function get_average_strategy(infoset::InfoSet)::Vector{Float64}
+    strategy = infoset.strategy_sum
     normalizing_sum = sum(infoset.strategy_sum)
     if normalizing_sum > 0
         return infoset.strategy_sum / normalizing_sum
@@ -138,169 +153,102 @@ function get_average_strategy(infoset::InfoSet)::Vector{Float64}
 end
 
 
-function update_strategy!(infoset::InfoSet, strategy::Vector{Float64})
-    infoset.strategy_sum .+= strategy
-end
-
 # # # # # # 
 
-# function play_kuhns_poker(deck::KuhnDeck, infosets::Dict{String, InfoSet}, history::History)
-#     # Your code logic here for playing the game using the given history
-#     # Iterate through the game for the number of iterations or until terminal state is reached
-#     for i in 1:5
-#         # Player 1's decision
-#         player1_card = history.player_cards[1]
-#         player1_infoset = infosets[player1_card]
-#         player1_strategy = get_strategy(player1_infoset)
 
-#         # Player 1 action
-#         player1_action = sample(Actions, Weights(player1_strategy))
-#         push!(history.actions, player1_action)
 
-#         if is_terminal(history)
-#             break
-#         end
-
-#         # Player 2's decision
-#         player2_card = history.player_cards[2]
-#         player2_infoset = infosets[player2_card]
-#         player2_strategy = get_strategy(player2_infoset)
-
-#         # Player 2 action
-#         player2_action = sample(Actions, Weights(player2_strategy))
-#         push!(history.actions, player2_action)
-
-#         if is_terminal(history)
-#             break
-#         end
-#     end
-
-#     # Calculate the utility at the end of the game
-#     return utility(history)
-# end
-
-# function play_kuhns_poker(deck::KuhnDeck, infosets::Dict{String, InfoSet}, history::History, player::Int, prob::Vector{Float64})
-#     # If the game reaches a terminal state, return utilities
-#     # @info history
-#     if is_terminal(history)
-#         return utility(history)
-#     end
-
-#     # Get the infoset key and strategy for the current player
-#     card = history.player_cards[player]
-#     infoset_key = card * join(history.actions, "")  # Card + action history as key
-#     infoset = infosets[infoset_key]
-#     strategy = get_strategy(infoset)
-
-#     # Initialize utility and regret values for the current infoset
-#     util = zeros(Float64, NUM_ACTIONS)
-#     node_util = 0.0
-
-#     # Iterate over possible actions
-#     for a_idx in 1:NUM_ACTIONS
-#         # Simulate taking action a_idx
-#         action = Actions[a_idx]
-#         push!(history.actions, action)
-
-#         # Calculate probabilities for the other player
-#         new_prob = copy(prob)
-#         new_prob[player] *= strategy[a_idx]
-
-#         # Recursively calculate utility
-#         util[a_idx] = play_kuhns_poker(deck, infosets, history, 3 - player, new_prob)[player]
-#         node_util += strategy[a_idx] * util[a_idx]
-
-#         # Undo action
-#         pop!(history.actions)
-#     end
-
-#     # Update regrets
-#     for a_idx in 1:NUM_ACTIONS
-#         regret = util[a_idx] - node_util
-#         infoset.regret_sum[a_idx] += prob[3 - player] * regret
-#     end
-
-#     # Update strategy sum for average strategy
-#     update_strategy!(infoset, strategy)
-
-#     return node_util
-# end
-
-function play_kuhns_poker(deck::KuhnDeck, infosets::Dict{String, InfoSet}, history::History, player::Int, prob::Vector{Float64})
+function play_kuhns_poker(infosets::Dict{String, InfoSet}, history::History, reach_prob::Vector{Float64})
     # If the game reaches a terminal state, return utilities
     if is_terminal(history)
-        return utility(history)
+        return
     end
 
+    if sum(reach_prob) == 0
+        return
+    end
+
+    n = length(join(history.actions)) # length(join(history.player_cards)) +
+    player = n % 2 + 1
+
     # Get the infoset key and strategy for the current player
+    card = history.player_cards[player] # index from 0 to 1
+    infoset_key = card * join(history.actions, "")  # Card + action history as key
+    infoset = infosets[infoset_key]
+    
+    strategy = get_strategy(infoset) # infoset strategy
+
+    if player == history.current_player # if player is agent
+        new_reach_prob = copy(reach_prob)
+        # simulate taking next actions
+        for a_idx in 1:NUM_ACTIONS
+            action = Actions[a_idx]
+            push!(history.actions, action) # push action to history
+
+            new_reach_prob[player] *= strategy[a_idx] # update reach Probability
+            play_kuhns_poker(infosets, history, new_reach_prob)
+            pop!(history.actions) # pop action out of history for next sim
+        end
+        infoset.strategy_sum += reach_prob[player] * strategy
+    else # if it is player 2 (opponent)
+        a = rand(Categorical(strategy)) # sample an action from the strategy
+        # a = rand([1,2]) # sample an action from the strategy
+        
+        action = Actions[a]
+        push!(history.actions, action) # push action to history
+        reach_prob[player] *= strategy[a]
+        play_kuhns_poker(infosets, history, reach_prob)
+        pop!(history.actions) # pop action out of history for next sim
+    end
+end
+
+function cfr_update(infosets::Dict{String, InfoSet}, history::History)
+    n = length(join(history.actions)) #  length(join(history.player_cards)) + 
+    player = n % 2 + 1
     card = history.player_cards[player]
+
+    if is_terminal(history)
+        # println("showdown strategy: ",)
+        term_util = utility(history)
+        return term_util[player]
+    end
+    
+    actions = history.actions
+    card = history.player_cards[player] # index from 0 to 1
     infoset_key = card * join(history.actions, "")  # Card + action history as key
     infoset = infosets[infoset_key]
     strategy = get_strategy(infoset)
-
-    # Initialize utility and regret values for the current infoset
-    util = zeros(Float64, NUM_ACTIONS)
-    node_util = 0.0
-
-    # Iterate over possible actions
-    for a_idx in 1:NUM_ACTIONS
-        # Simulate taking action a_idx
-        action = Actions[a_idx]
-        push!(history.actions, action)
-
-        # Calculate probabilities for the other player
-        new_prob = copy(prob)
-        new_prob[player] *= strategy[a_idx]
-
-        # Recursively calculate utilities for both players
-        sub_util = play_kuhns_poker(deck, infosets, history, 3 - player, new_prob)
-        util[a_idx] = sub_util[player]
-        node_util += strategy[a_idx] * sub_util[player]
-
-        # Undo action
-        pop!(history.actions)
-    end
-
-    # Update regrets
-    for a_idx in 1:NUM_ACTIONS
-        regret = util[a_idx] - node_util
-        infoset.regret_sum[a_idx] += prob[3 - player] * regret
-    end
-
-    # Update strategy sum for average strategy
-    update_strategy!(infoset, strategy)
-
-    # Return a vector of utilities for both players
-    utilities = zeros(Float64, 2)
-    utilities[player] = node_util
-    utilities[3 - player] = -node_util  # Zero-sum game: u1 + u2 = 0
-    return utilities
-end
-
-
-
-# Function to perform CFR updates
-function cfr_update(infosets::Dict{String, InfoSet}, history::History, utilities::Vector{Float64}, cfr_weight::Float64)
-    actions = history.actions
-    player1_card = history.player_cards[1]
-    player2_card = history.player_cards[2]
-    
-    # Update regrets for Player 1
-    player1_infoset = infosets[player1_card]
-    player1_strategy = get_strategy(player1_infoset)
-    for action in Actions
-        regret = utilities[1] - utilities[2]  # Regret for Player 1
-        idx = findfirst(x -> x == action, Actions)
-        player1_infoset.regret_sum[idx] += cfr_weight * regret
-    end
-    
-    # Update regrets for Player 2
-    player2_infoset = infosets[player2_card]
-    player2_strategy = get_strategy(player2_infoset)
-    for action in Actions
-        regret = utilities[2] - utilities[1]  # Regret for Player 2
-        idx = findfirst(x -> x == action, Actions)
-        player2_infoset.regret_sum[idx] += cfr_weight * regret
+    action_utils = zeros(NUM_ACTIONS)
+    # println("showdown strategy: ", strategy)
+    if player == history.current_player 
+        # calculate counterfactual utility over actions
+        for a_idx in 1:NUM_ACTIONS
+            action = Actions[a_idx]
+            
+            push!(history.actions, action)
+            # println(history.actions)
+            action_utils[a_idx] = -1.0 * cfr_update(infosets, history)
+            pop!(history.actions) # pop action out of history for next sim
+            # println(history.actions, " popped")  
+            # println(action_utils)  
+        end
+        util = sum(action_utils .* strategy)
+        # println(history.player_cards[1],history.actions)
+        # println("strat = ", strategy)
+        regrets = action_utils .- util 
+        # println(regrets," = ", action_utils, " - ", util)
+        infoset.regret_sum += regrets 
+        # println("P1 util: ", util)
+        return util
+    else
+        a = rand(Categorical(strategy)) # sample an action from the strategy
+        # a = rand([1,2])
+        action = Actions[a]
+        push!(history.actions, action) # push action to history
+        util = -1.0 * cfr_update(infosets, history)
+        # println("P2 util: ", util)
+        pop!(history.actions) 
+        infoset.strategy_sum += strategy 
+        return util
     end
 end
 
@@ -321,62 +269,43 @@ function initialize_infosets(deck::KuhnDeck)::Dict{String, InfoSet}
 end
 
 
-# function print_strategy_table(infosets::Dict{String, InfoSet})
-#     # Initialize the table with column headers
-#     table = [["Infoset", "Bet", "Pass"]]
-    
-#     # Iterate over each infoset
-#     for (key, infoset) in infosets
-#         # Extract the strategy for each infoset
-#         strategy = get_strategy(infoset)
-        
-#         # Add a row to the table: infoset, bet strategy, pass strategy
-#         push!(table, [key, string(strategy[1]), string(strategy[2])])
-#     end
-
-#     # Print the table
-#     pretty_table(table)
-# end
-
 function print_strategy_table(infosets::Dict{String, InfoSet})
-    table = [["Infoset", "Bet", "Pass"]]
+    table = [["Infoset", "Pass", "Bet"]]
     for (key, infoset) in infosets
         strategy = get_average_strategy(infoset)
-        push!(table, [key, string(round(strategy[2], digits = 3)), string(round(strategy[1], digits = 3))])
+        # strategy = infoset.strategy_sum
+        push!(table, [key, string(round(strategy[1], digits = 3)), string(round(strategy[2], digits = 3))])
     end
     pretty_table(table)
 end
 
 
-# function train_kuhn_poker_cfr(iterations::Int)
-#     deck = create_kuhn_deck()
-#     infosets = initialize_infosets(deck)
-    
-#     for i in 1:iterations
-#         deck = create_kuhn_deck()  # Reshuffle deck at the start of each game
-#         history = initialize_history(deck)  # Initialize a fresh history for this game
-#         utilities = play_kuhns_poker(deck, infosets, history)  # Play a game and get utilities
-        
-#         cfr_weight = 1.0 / iterations  # Weight for CFR updates
-#         cfr_update(infosets, history, utilities, cfr_weight)  # Perform CFR update after each game
-        
-#         # After each iteration, output the current strategies in a table format
-#         println("\nIteration $i Strategies:")
-#         print_strategy_table(infosets)
-#     end
-# end
-
 function train_kuhn_poker_cfr(iterations::Int)
+    EV = 0
     deck = create_kuhn_deck()
     infosets = initialize_infosets(deck)
-
     for i in 1:iterations
         deck = create_kuhn_deck()  # Reshuffle deck at the start of each game
         history = initialize_history(deck)  # Initialize a fresh history for this game
-
+        if i == iterations ÷ 2
+            for (k,v) in infosets 
+                v.strategy_sum = zeros(NUM_ACTIONS)
+                EV = 0
+            end
+        end
+        for j in 1:NUM_PLAYERS 
+            history.current_player = j 
+            shuffleDeck!(deck)
+            EV += cfr_update(infosets, history)
+            println("EV: ",EV)
+        end
         # Start recursive CFR from Player 1 with equal probabilities for both players
-        play_kuhns_poker(deck, infosets, history, 1, [1.0, 1.0])
+        play_kuhns_poker(infosets, history, [1.0, 1.0])
+        # print_strategy_table(infosets)
+        shuffleDeck!(deck)
     end
+    EV /= iterations
+    println("final EV: ", EV)
 
     # Output the final strategies
     println("\nFinal Strategies:")
@@ -384,15 +313,26 @@ function train_kuhn_poker_cfr(iterations::Int)
 end
 
 
+# function train_kuhn_poker_cfr(iterations::Int)
+#     deck = create_kuhn_deck()
+#     infosets = initialize_infosets(deck)
+
+#     for i in 1:iterations
+#         deck = create_kuhn_deck()  # Reshuffle deck at the start of each game
+#         history = initialize_history(deck)  # Initialize a fresh history for this game
+
+#         # Start recursive CFR from Player 1 with equal probabilities for both players
+#         play_kuhns_poker(infosets, history, [1.0, 1.0])
+#     end
+
+#     # Output the final strategies
+#     println("\nFinal Strategies:")
+#     print_strategy_table(infosets)
+# end
+
+
 # # # # # # # #
-iterations = 100000
+iterations = 10000
 
 
 train_kuhn_poker_cfr(iterations)
-# deck = create_kuhn_deck()
-#     infosets = initialize_infosets(deck)
-#     print_strategy_table(infosets)
-# deck = create_kuhn_deck()  # Reshuffle deck at the start of each game
-# history = initialize_history(deck)  # Initialize a fresh history for this game
-# infosets = initialize_infosets(deck)
-# utilities = play_kuhns_poker(deck, infosets, history)  # Play a game and get utilities

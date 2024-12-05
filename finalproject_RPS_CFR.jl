@@ -65,7 +65,7 @@ function train_cfr_policies_over_time(iterations)
     for _ in 1:iterations
         # Get current player strategy based on regret sums
         strategy = get_strategy(regret_sum)
-        opponent_strategy_copy = copy(opponent_strategy)
+        opponent_strategy_copy = [1,0,0]#copy(opponent_strategy)
         
         # Accumulate strategies to calculate average policy later
         strategy_sum += strategy
@@ -104,11 +104,12 @@ player_policies, opponent_policies = train_cfr_policies_over_time(iterations)
 player_rock = [policy[1] for policy in player_policies]
 player_paper = [policy[2] for policy in player_policies]
 player_scissors = [policy[3] for policy in player_policies]
+# println([player_rock, player_paper, player_scissors])
 
 opponent_rock = [policy[1] for policy in opponent_policies]
 opponent_paper = [policy[2] for policy in opponent_policies]
 opponent_scissors = [policy[3] for policy in opponent_policies]
-
+# println([opponent_rock, opponent_paper, opponent_scissors])
 # Plot player policies over time
 plot(1:iterations, player_rock, label="Player Rock", xlabel="Iteration", ylabel="Probability", title="Player Policies Over Time",
 )
