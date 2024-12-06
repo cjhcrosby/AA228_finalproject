@@ -317,7 +317,7 @@ if __name__ == "__main__":
     # setInitialStrategiesToSpecificValues() # uncomment in order to get the values in professor bryce's youtube video: https://www.youtube.com/watch?v=ygDt_AumPr0&t=668s: Counterfactual Regret Minimization (AGT 26)
 
     # numIterations=300000 # best numIterations for closest convergence
-    numIterations=3000 # best numIterations for plotting the convergence
+    numIterations=300000 # best numIterations for plotting the convergence
     # numIterations=1 # best to checking that the output values match professor bryce's youtube video: https://www.youtube.com/watch?v=ygDt_AumPr0&t=668s: Counterfactual Regret Minimization (AGT 26)
     totGains = []
 
