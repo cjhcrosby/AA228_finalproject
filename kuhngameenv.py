@@ -177,6 +177,7 @@ def main():
     print(f"Player's chip win rate: {(player_chips - starting_chips) / num_games:.2f}")
     print(f"Player's chips after {num_games} games: {player_chips}")
     print(f"Opponent's chips after {num_games} games: {opponent_chips}")
+    
 '''
     # Display each round's details
     print("\nRound Logs:")
